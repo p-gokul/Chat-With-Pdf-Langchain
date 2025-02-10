@@ -41,7 +41,7 @@ async function initializeVectorStore() {
   });
 
   // Get or create the Pinecone index
-  const index = await getIndexOrCreate({
+  await getIndexOrCreate({
     pc: pineconeClient,
     indexName: INDEX_NAME,
     dimension: 768,
@@ -50,8 +50,22 @@ async function initializeVectorStore() {
     region: "us-east-1",
   });
 
+  const pineconeIndex = pineconeClient.Index(INDEX_NAME);
+
+  const stats = await pineconeIndex.describeIndexStats();
+
+  // If the namespace exists and has at least one vector, assume the PDF has already been processed.
+  if (
+    stats.namespaces &&
+    stats.namespaces["pdf-namespace"] &&
+    stats.namespaces["pdf-namespace"].recordCount > 0
+  ) {
+    console.log("Namespace already exists. PDF already processed.");
+    return; // Exit the function early.
+  }
+
   vectorStore = await PineconeStore.fromDocuments(splitDocs, embeddings, {
-    // pineconeIndex: index,
+    pineconeIndex,
     namespace: "pdf-namespace",
   });
 
@@ -65,20 +79,10 @@ async function queryPDF(userQuery: string) {
       apiKey: GEMINI_KEY,
     });
 
-    const index = await pineconeClient.createIndex({
-      name: INDEX_NAME,
-      dimension: 768, // Replace with your model dimensions
-      metric: "cosine", // Replace with your model metric
-      spec: {
-        serverless: {
-          cloud: "aws",
-          region: "ap-northeast-3",
-        },
-      },
-    });
+    const pineconeIndex = pineconeClient.Index(INDEX_NAME);
 
     const vectorStore = await PineconeStore.fromExistingIndex(embeddings, {
-      //   pineconeIndex: index,
+      pineconeIndex,
       namespace: "pdf-namespace",
     });
 
@@ -99,7 +103,7 @@ async function queryPDF(userQuery: string) {
 
     // Generate response using Gemini
     const result = await model.generateContent(prompt);
-    return result.response.text;
+    return result.response.text();
   } catch (error) {
     console.error("Error querying PDF:", error);
     throw error;
@@ -110,11 +114,19 @@ async function queryPDF(userQuery: string) {
 async function main() {
   try {
     // Initialize the vector store (only need to do this once)
+
+    console.log("\nStart Store Initialization\n");
     await initializeVectorStore();
     console.log("Vector store initialized successfully");
 
+    console.log(
+      "\n------------------------------------------------------------------------\n"
+    );
+
+    console.log("\nStart Querying ::\n");
+
     // Example query (you can replace this with actual user queries)
-    const query = "What are the main topics discussed in the PDF?";
+    const query = "Can you explain about the Nuclear Physics.";
     const answer = await queryPDF(query);
     console.log("Query:", query);
     console.log("Answer:", answer);
