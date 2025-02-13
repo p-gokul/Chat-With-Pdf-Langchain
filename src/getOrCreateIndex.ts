@@ -39,11 +39,9 @@ async function getIndexOrCreate({
     // Check if the desired index already exists
     const exists = result.indexes.some((idx) => idx.name === indexName);
     if (exists) {
-      console.log(`Index "${indexName}" already exists.`);
       return indexName; // Return the name of the existing index
     } else {
       // Create a new index if it doesn't exist
-      console.log(`Creating index "${indexName}"...`);
       const index = await pc.createIndex({
         name: indexName,
         dimension: dimension,
